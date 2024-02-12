@@ -74,12 +74,18 @@ app.post("/login", async (req, res) => {
       const storedHashedPassword = user.password;
 
       //compare the storedHashedPassword with the login Password
-
-      if (loginPassword === storedHashedPassword) {
-        res.render("secrets.ejs");
-      } else {
-        res.send("Incorrect Password");
-      }
+      bcrypt.compare(loginPassword, storedHashedPassword, (err, result)=>{
+if(err){
+  console.log("Error comparing passwords:", err);
+}else{
+  if(result){
+    res.render('secrets.ejs')
+  } else {
+    res.send("Incorrect password")
+  }
+}
+      });
+     
     } else {
       res.send("User not found");
     }
