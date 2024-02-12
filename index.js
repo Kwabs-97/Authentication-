@@ -45,14 +45,13 @@ app.post("/register", async (req, res) => {
     if (checkResult.rows.length > 0) {
       res.send("Email already exists. Try logging in.");
     } else {
-
       //password hashing
-      bcrypt.hash(password, saltRounds, async () => {
+      bcrypt.hash(password, saltRounds, async (err,hash) => {
+        console.log(hash);
         const result = await db.query(
           "INSERT INTO users (email, password) VALUES ($1, $2)",
-          [email, password]
+          [email, hash]
         );
-        console.log(result);
         res.render("secrets.ejs");
       })
     
