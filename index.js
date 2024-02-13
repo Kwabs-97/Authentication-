@@ -4,6 +4,7 @@ import pg from "pg";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import passport from "passport";
+import { Strategy } from "passport-local";
 
 const app = express();
 const port = 3000;
@@ -28,7 +29,10 @@ app.use(express.static("public"));
 app.use(session({
   secret:"TOPSECRET",
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
+  cookie: {
+    maxAge: 6000 * 60 * 60 * 24 
+  }
 }))
 
 
@@ -69,10 +73,13 @@ app.post("/register", async (req, res) => {
       bcrypt.hash(password, saltRounds, async (err,hash) => {
         console.log(hash);
         const result = await db.query(
-          "INSERT INTO users (email, password) VALUES ($1, $2)",
+          "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING * ",
           [email, hash]
         );
-        res.render("secrets.ejs");
+       const user = result.rows[0];
+       req.login(user, (err) => {
+        res.redirect("/secrets");
+       })
       })
     
     }
@@ -81,38 +88,46 @@ app.post("/register", async (req, res) => {
   }
 });
 
-app.post("/login", async (req, res) => {
-  const email = req.body.username;
-  const loginPassword = req.body.password;
+app.post("/login", passport.authenticate("local",{
+  successRedirect:"/secrets",
+  failureRedirect:"/login",
+}));
 
+passport.use(new Strategy( async function verify(username,password, callback){
   try {
-    const result = await db.query("SELECT * FROM users WHERE email = $1", [
-      email,
-    ]);
+    const result = await db.query("SELECT * FROM users WHERE email = $1", [username]);
     if (result.rows.length > 0) {
       const user = result.rows[0];
       const storedHashedPassword = user.password;
 
       //compare the storedHashedPassword with the login Password
-      bcrypt.compare(loginPassword, storedHashedPassword, (err, result)=>{
+      bcrypt.compare(password, storedHashedPassword, (err, result)=>{
 if(err){
-  console.log("Error comparing passwords:", err);
+ return callback(err);
 }else{
   if(result){
-    res.render('secrets.ejs')
+    return callback(null, user);
   } else {
-    res.send("Incorrect password")
+    return callback(err, false);
   }
 }
       });
      
     } else {
-      res.send("User not found");
+      return callback("User not found");
     }
   } catch (err) {
-    console.log(err);
+    return callback(err);
   }
+}));
+
+passport.serializeUser((user, cb) => {
+cb(null, user);
 });
+
+passport.deserializeUser((user, cb) => {
+  cb(null, user);
+})
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
